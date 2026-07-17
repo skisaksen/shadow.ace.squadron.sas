@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shadow Ace Squadron [SAS] — DCS World Naval Aviation</title>
+<meta name="description" content="Shadow Ace Squadron [SAS] — a DCS World squadron flying structured naval air operations. Carrier ops, contested airspace, real teamwork. Recruiting now.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #04070c;
+    --bg2: #070d16;
+    --panel: rgba(10, 18, 30, 0.72);
+    --green: #46ff9a;
+    --green-dim: #1d7a4c;
+    --amber: #ffb347;
+    --red: #ff4d4d;
+    --cyan: #57d7ff;
+    --text: #c9d6e2;
+    --text-dim: #6d7f92;
+    --line: rgba(87, 215, 255, 0.14);
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Chakra Petch', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--display);
+    overflow-x: hidden;
+  }
+
+  /* ---------- canvas background ---------- */
+  #radar-canvas {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+  }
+  .vignette {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(2,4,8,0.75) 100%);
+  }
+  .scanlines {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.22) 0px, rgba(0,0,0,0.22) 1px, transparent 1px, transparent 3px);
+    opacity: .5;
+  }
+
+  /* ---------- layout ---------- */
+  .content { position: relative; z-index: 3; }
+  section { padding: 110px 8vw; max-width: 1280px; margin: 0 auto; }
+
+  /* ---------- top nav ---------- */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 4vw;
+    background: linear-gradient(to bottom, rgba(4,7,12,0.92), rgba(4,7,12,0.55) 70%, transparent);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-brand { font-family: var(--mono); font-size: 15px; letter-spacing: 3px; color: var(--green); text-decoration: none; }
+  .nav-brand .tag { color: var(--cyan); }
+  .nav-links { display: flex; gap: 28px; }
+  .nav-links a {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 2px;
+    color: var(--text-dim); text-decoration: none; text-transform: uppercase;
+    transition: color .2s;
+  }
+  .nav-links a:hover { color: var(--green); }
+  @media (max-width: 720px) { .nav-links { display: none; } }
+
+  /* ---------- hero ---------- */
+  .hero {
+    min-height: 100vh;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center; padding: 120px 6vw 60px;
+    position: relative;
+  }
+  .hero-clearance {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 4px;
+    color: var(--red); border: 1px solid rgba(255,77,77,.45);
+    padding: 6px 16px; margin-bottom: 34px;
+    animation: flicker 4s infinite;
+  }
+  @keyframes flicker { 0%,93%,100% {opacity:1;} 94% {opacity:.4;} 96% {opacity:1;} 98% {opacity:.6;} }
+  .hero h1 {
+    font-size: clamp(44px, 9vw, 118px);
+    font-weight: 700; letter-spacing: .06em; line-height: .95;
+    color: #eaf4ff;
+    text-shadow: 0 0 24px rgba(87,215,255,.35), 0 0 90px rgba(70,255,154,.18);
+    text-transform: uppercase;
+  }
+  .hero h1 .shadow-word { color: var(--green); text-shadow: 0 0 30px rgba(70,255,154,.55); }
+  .hero .callsign {
+    font-family: var(--mono); font-size: clamp(14px, 2vw, 20px);
+    letter-spacing: 10px; color: var(--cyan); margin-top: 18px;
+  }
+  .hero .motto {
+    margin-top: 26px; font-size: clamp(15px, 1.8vw, 19px);
+    color: var(--text-dim); letter-spacing: 3px; text-transform: uppercase; font-weight: 300;
+  }
+  .hero-ctas { margin-top: 48px; display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    font-family: var(--mono); font-size: 13px; letter-spacing: 3px; text-transform: uppercase;
+    padding: 15px 34px; text-decoration: none; position: relative;
+    transition: all .25s;
+  }
+  .btn-primary {
+    color: #04120a; background: var(--green);
+    box-shadow: 0 0 22px rgba(70,255,154,.45);
+  }
+  .btn-primary:hover { box-shadow: 0 0 42px rgba(70,255,154,.8); transform: translateY(-2px); }
+  .btn-ghost { color: var(--cyan); border: 1px solid rgba(87,215,255,.5); }
+  .btn-ghost:hover { background: rgba(87,215,255,.1); border-color: var(--cyan); }
+  .hero-scroll {
+    position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 10px; letter-spacing: 3px; color: var(--text-dim);
+    animation: bob 2.2s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100% { transform: translate(-50%,0);} 50% { transform: translate(-50%,8px);} }
+
+  /* ---------- status ticker ---------- */
+  .ticker-wrap {
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    background: rgba(5,10,18,.85); overflow: hidden; white-space: nowrap;
+  }
+  .ticker {
+    display: inline-block; padding: 11px 0;
+    font-family: var(--mono); font-size: 12px; letter-spacing: 2px; color: var(--green-dim);
+    animation: scroll-left 38s linear infinite;
+  }
+  .ticker b { color: var(--green); font-weight: 400; }
+  .ticker .warn { color: var(--amber); }
+  @keyframes scroll-left { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+  /* ---------- section headers ---------- */
+  .sec-label {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 5px;
+    color: var(--green); text-transform: uppercase; margin-bottom: 14px;
+  }
+  .sec-label::before { content: '// '; color: var(--text-dim); }
+  h2 {
+    font-size: clamp(28px, 4.4vw, 46px); font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: #eaf4ff; margin-bottom: 34px;
+  }
+
+  /* ---------- panels ---------- */
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 34px; position: relative; backdrop-filter: blur(4px);
+  }
+  .panel::before, .panel::after {
+    content: ''; position: absolute; width: 14px; height: 14px;
+    border-color: var(--green); border-style: solid;
+  }
+  .panel::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+  .panel::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+  .about-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; }
+  @media (max-width: 900px) { .about-grid { grid-template-columns: 1fr; } }
+  .about-grid p { line-height: 1.75; color: var(--text); font-weight: 300; margin-bottom: 16px; }
+  .about-grid p:last-child { margin-bottom: 0; }
+  .stat-list { display: flex; flex-direction: column; gap: 18px; }
+  .stat { border-left: 2px solid var(--green); padding-left: 16px; }
+  .stat .num { font-family: var(--mono); font-size: 30px; color: var(--green); }
+  .stat .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; }
+
+  /* ---------- aircraft ---------- */
+  .ac-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+  .ac-card {
+    background: var(--panel); border: 1px solid var(--line); padding: 24px 22px;
+    transition: border-color .25s, transform .25s, box-shadow .25s; position: relative; overflow: hidden;
+  }
+  .ac-card:hover { border-color: rgba(70,255,154,.55); transform: translateY(-4px); box-shadow: 0 12px 34px rgba(0,0,0,.5), 0 0 22px rgba(70,255,154,.08); }
+  .ac-card .ac-role {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 10px;
+  }
+  .ac-card h3 { font-size: 20px; color: #eaf4ff; letter-spacing: .04em; margin-bottom: 10px; }
+  .ac-card p { font-size: 13.5px; line-height: 1.6; color: var(--text-dim); font-weight: 300; }
+  .ac-card .ac-sil {
+    position: absolute; right: -8px; top: -6px; font-size: 44px; opacity: .12; color: var(--cyan);
+  }
+
+  /* ---------- operations ---------- */
+  .ops-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+  .op { background: var(--panel); border: 1px solid var(--line); padding: 28px; }
+  .op .op-code { font-family: var(--mono); font-size: 11px; color: var(--cyan); letter-spacing: 3px; margin-bottom: 12px; }
+  .op h3 { font-size: 19px; color: #eaf4ff; margin-bottom: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .op p { font-size: 14px; line-height: 1.65; color: var(--text-dim); font-weight: 300; }
+  .op .op-status { margin-top: 16px; font-family: var(--mono); font-size: 10px; letter-spacing: 2px; }
+  .op .op-status.green { color: var(--green); }
+  .op .op-status.amber { color: var(--amber); }
+
+  /* ---------- join ---------- */
+  .join-panel { text-align: center; padding: 60px 34px; }
+  .join-panel h2 { margin-bottom: 18px; }
+  .join-panel p { max-width: 620px; margin: 0 auto 14px; line-height: 1.7; color: var(--text-dim); font-weight: 300; }
+  .join-reqs {
+    display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; margin: 34px 0 40px;
+    font-family: var(--mono); font-size: 12px; letter-spacing: 2px; color: var(--text);
+  }
+  .join-reqs span::before { content: '▸ '; color: var(--green); }
+
+  /* ---------- footer ---------- */
+  footer {
+    border-top: 1px solid var(--line); padding: 26px 4vw; text-align: center;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 2px; color: var(--text-dim);
+    background: rgba(4,7,12,.9);
+  }
+  footer .cls { color: var(--red); opacity: .7; margin-bottom: 8px; }
+
+  /* ---------- reveal on scroll ---------- */
+  .reveal { opacity: 0; transform: translateY(26px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.vis { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+
+<canvas id="radar-canvas"></canvas>
+<div class="vignette"></div>
+<div class="scanlines"></div>
+
+<div class="content">
+
+<nav>
+  <a class="nav-brand" href="#top">SHADOW ACE SQUADRON <span class="tag">[SAS]</span></a>
+  <div class="nav-links">
+    <a href="#about">About</a>
+    <a href="#aircraft">Aircraft</a>
+    <a href="#operations">Operations</a>
+    <a href="#join">Join</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="hero-clearance">SAS INTERNAL // FLEET EYES ONLY</div>
+  <h1><span class="shadow-word">Shadow&nbsp;Ace</span><br>Squadron</h1>
+  <div class="callsign">[ S A S ]</div>
+  <div class="motto">Strike from the dark. Own the night.</div>
+  <div class="hero-ctas">
+    <a class="btn btn-primary" href="#join">Join the Squadron</a>
+    <a class="btn btn-ghost" href="#operations">Current Operations</a>
+  </div>
+  <div class="hero-scroll">▼ SCROLL FOR BRIEFING</div>
+</header>
+
+<div class="ticker-wrap">
+  <div class="ticker">
+    <b>FLEET STATUS:</b> OPERATIONAL &nbsp;◆&nbsp; <b>CVN DECK:</b> READY &nbsp;◆&nbsp; <span class="warn">NAVOPORD 01-26 IN EFFECT</span> &nbsp;◆&nbsp; <b>AIRSPACE:</b> CONTESTED &nbsp;◆&nbsp; <b>RECRUITMENT:</b> OPEN — ALL SKILL LEVELS &nbsp;◆&nbsp; <b>NEXT OP:</b> SUNDAY 1900Z &nbsp;◆&nbsp; <b>SRS COMMS:</b> ONLINE &nbsp;◆&nbsp;
+    <b>FLEET STATUS:</b> OPERATIONAL &nbsp;◆&nbsp; <b>CVN DECK:</b> READY &nbsp;◆&nbsp; <span class="warn">NAVOPORD 01-26 IN EFFECT</span> &nbsp;◆&nbsp; <b>AIRSPACE:</b> CONTESTED &nbsp;◆&nbsp; <b>RECRUITMENT:</b> OPEN — ALL SKILL LEVELS &nbsp;◆&nbsp; <b>NEXT OP:</b> SUNDAY 1900Z &nbsp;◆&nbsp; <b>SRS COMMS:</b> ONLINE &nbsp;◆&nbsp;
+  </div>
+</div>
+
+<section id="about" class="reveal">
+  <div class="sec-label">Squadron Briefing</div>
+  <h2>Who We Are</h2>
+  <div class="about-grid">
+    <div class="panel">
+      <p>Shadow Ace Squadron is a DCS World unit built around one idea: flying is better when it means something. We run structured, story-driven air operations — carrier launches into contested airspace, strike packages with real objectives, and missions where your wingman actually matters.</p>
+      <p>We take the simulation seriously and ourselves a little less so. Briefings are real, comms are disciplined, and the debrief usually ends in laughter. Whether you're a day-one pilot who just bought your first module or a virtual thousand-hour veteran, there's a seat in the package for you.</p>
+      <p>No paywalls, no drama, no gatekeeping. Show up, fly the brief, cover your lead.</p>
+    </div>
+    <div class="panel stat-list">
+      <div class="stat"><div class="num">24/7</div><div class="lbl">Discord — always manned</div></div>
+      <div class="stat"><div class="num">WEEKLY</div><div class="lbl">Squadron operations</div></div>
+      <div class="stat"><div class="num">ALL</div><div class="lbl">Skill levels welcome</div></div>
+      <div class="stat"><div class="num">ZERO</div><div class="lbl">Tolerance for drama</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="aircraft" class="reveal">
+  <div class="sec-label">Order of Battle</div>
+  <h2>What We Fly</h2>
+  <div class="ac-grid">
+    <div class="ac-card"><div class="ac-sil">✈</div><div class="ac-role">Fleet Air Defense</div><h3>F-14B Tomcat</h3><p>The outer air battle. Phoenix shots at range, Case III recoveries at night. Anytime, baby.</p></div>
+    <div class="ac-card"><div class="ac-sil">✈</div><div class="ac-role">Multirole Backbone</div><h3>F/A-18C Hornet</h3><p>CAP, SEAD, anti-ship, precision strike — the aircraft that does it all off the boat.</p></div>
+    <div class="ac-card"><div class="ac-sil">✈</div><div class="ac-role">Air Superiority</div><h3>F-16C Viper</h3><p>Light, fast, lethal. Sweeps the lane and picks fights it intends to win.</p></div>
+    <div class="ac-card"><div class="ac-sil">✈</div><div class="ac-role">Expeditionary Strike</div><h3>AV-8B Harrier II</h3><p>Off the amphib or a road base — responsive fires wherever the fight moves.</p></div>
+    <div class="ac-card"><div class="ac-sil">✈</div><div class="ac-role">Maritime Strike</div><h3>AJS-37 Viggen</h3><p>Low, fast, sea-skimming. RB-15s on the deck and gone before the SAM operator blinks.</p></div>
+    <div class="ac-card"><div class="ac-sil">✈</div><div class="ac-role">Close Air Support</div><h3>A-10C II Warthog</h3><p>When the ground force needs a guardian angel with a 30mm halo.</p></div>
+    <div class="ac-card"><div class="ac-sil">✚</div><div class="ac-role">Attack Rotary</div><h3>AH-64D Apache</h3><p>Armor's worst nightmare. Hellfires from the treeline, gun runs on demand.</p></div>
+    <div class="ac-card"><div class="ac-sil">✚</div><div class="ac-role">Utility / Assault</div><h3>UH-1H Huey</h3><p>Troops in, wounded out, door guns hot. The sound of the cavalry arriving.</p></div>
+  </div>
+</section>
+
+<section id="operations" class="reveal">
+  <div class="sec-label">Current Tasking</div>
+  <h2>Operations</h2>
+  <div class="ops-grid">
+    <div class="op">
+      <div class="op-code">NAVOPORD 01-26 // AIR TASKING ANNEX</div>
+      <h3>Campaign Nights</h3>
+      <p>Persistent, story-driven campaigns where every sortie changes the map. Diplomatic efforts have failed — coalition forces are moving into a contested theater, and air superiority is not guaranteed.</p>
+      <div class="op-status amber">STATUS: IN EFFECT</div>
+    </div>
+    <div class="op">
+      <div class="op-code">TRAINING PIPELINE // ALL AIRFRAMES</div>
+      <h3>Flight School</h3>
+      <p>From cold-start to carrier qual. Structured training syllabus, patient instructors, and no such thing as a stupid question. We build pilots, not just kill boards.</p>
+      <div class="op-status green">STATUS: ENROLLING</div>
+    </div>
+    <div class="op">
+      <div class="op-code">OPEN SKIES // CASUAL FLIGHTS</div>
+      <h3>Weeknight Sorties</h3>
+      <p>Not every night is a war. Formation practice, BFM hops, low-level runs through the valleys, and the occasional very unauthorized flyby of the boat.</p>
+      <div class="op-status green">STATUS: DAILY</div>
+    </div>
+  </div>
+</section>
+
+<section id="join" class="reveal">
+  <div class="panel join-panel">
+    <div class="sec-label" style="text-align:center;">Recruitment — Open</div>
+    <h2>Fly With Us</h2>
+    <p>No tryouts. No minimum hours. No attendance contracts. Bring a copy of DCS World, a headset, and the will to get better every flight.</p>
+    <div class="join-reqs">
+      <span>DCS WORLD (FREE)</span>
+      <span>WORKING MIC + SRS</span>
+      <span>GOOD ATTITUDE</span>
+    </div>
+    <a class="btn btn-primary" href="#DISCORD_INVITE_PLACEHOLDER" title="Discord invite coming soon">Report In — Join Our Discord</a>
+    <p style="margin-top:18px; font-family:var(--mono); font-size:11px; letter-spacing:2px;">SELECTION CONSIDERED FINAL UPON SUBMISSION.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="cls">SAS INTERNAL // FLEET EYES ONLY</div>
+  <div>SHADOW ACE SQUADRON [SAS] — A DCS WORLD COMMUNITY. NOT AFFILIATED WITH ANY REAL-WORLD MILITARY ORGANIZATION.</div>
+</footer>
+
+</div>
+
+<script>
+/* ============ RADAR / BATTLESPACE CANVAS ============ */
+const cv = document.getElementById('radar-canvas');
+const cx = cv.getContext('2d');
+let W, H, DPR;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = cv.width = innerWidth * DPR;
+  H = cv.height = innerHeight * DPR;
+  cv.style.width = innerWidth + 'px';
+  cv.style.height = innerHeight + 'px';
+}
+resize();
+addEventListener('resize', resize);
+
+/* radar center sits right-of-center for cinematic composition */
+function radarCenter() { return { x: W * 0.72, y: H * 0.46, r: Math.max(W, H) * 0.34 }; }
+
+/* --- contacts (blips) --- */
+const blips = [];
+function spawnBlip() {
+  const { x, y, r } = radarCenter();
+  const a = Math.random() * Math.PI * 2;
+  const d = (0.25 + Math.random() * 0.72) * r;
+  blips.push({
+    x: x + Math.cos(a) * d,
+    y: y + Math.sin(a) * d,
+    hostile: Math.random() < 0.45,
+    life: 0,
+    max: 500 + Math.random() * 400
+  });
+}
+for (let i = 0; i < 14; i++) spawnBlip();
+
+/* --- missiles --- */
+const missiles = [];
+function spawnMissile() {
+  const fromLeft = Math.random() < 0.65;
+  const y0 = H * (0.15 + Math.random() * 0.7);
+  const y1 = H * (0.1 + Math.random() * 0.75);
+  missiles.push({
+    x: fromLeft ? -60 * DPR : W + 60 * DPR,
+    y: y0,
+    vx: (fromLeft ? 1 : -1) * (3.2 + Math.random() * 2.4) * DPR,
+    vy: ((y1 - y0) / W) * 3 * DPR,
+    trail: [],
+    hostile: Math.random() < 0.4
+  });
+}
+
+let sweep = 0;
+let t = 0;
+
+function drawGrid() {
+  cx.strokeStyle = 'rgba(87,215,255,0.045)';
+  cx.lineWidth = 1;
+  const step = 90 * DPR;
+  for (let gx = 0; gx < W; gx += step) { cx.beginPath(); cx.moveTo(gx, 0); cx.lineTo(gx, H); cx.stroke(); }
+  for (let gy = 0; gy < H; gy += step) { cx.beginPath(); cx.moveTo(0, gy); cx.lineTo(W, gy); cx.stroke(); }
+}
+
+function drawRadar() {
+  const { x, y, r } = radarCenter();
+
+  /* range rings */
+  for (let i = 1; i <= 4; i++) {
+    cx.beginPath();
+    cx.arc(x, y, (r * i) / 4, 0, Math.PI * 2);
+    cx.strokeStyle = 'rgba(70,255,154,' + (0.10 - i * 0.015) + ')';
+    cx.lineWidth = 1 * DPR;
+    cx.stroke();
+  }
+  /* cross hairs */
+  cx.strokeStyle = 'rgba(70,255,154,0.07)';
+  cx.beginPath(); cx.moveTo(x - r, y); cx.lineTo(x + r, y); cx.stroke();
+  cx.beginPath(); cx.moveTo(x, y - r); cx.lineTo(x, y + r); cx.stroke();
+
+  /* bearing ticks */
+  cx.save();
+  cx.translate(x, y);
+  for (let a = 0; a < 360; a += 10) {
+    const rad = (a * Math.PI) / 180;
+    const inner = a % 30 === 0 ? r - 14 * DPR : r - 7 * DPR;
+    cx.beginPath();
+    cx.moveTo(Math.cos(rad) * inner, Math.sin(rad) * inner);
+    cx.lineTo(Math.cos(rad) * r, Math.sin(rad) * r);
+    cx.strokeStyle = 'rgba(70,255,154,0.14)';
+    cx.stroke();
+  }
+  cx.restore();
+
+  /* sweep */
+  const grad = cx.createConicGradient ? cx.createConicGradient(sweep, x, y) : null;
+  if (grad) {
+    grad.addColorStop(0, 'rgba(70,255,154,0.16)');
+    grad.addColorStop(0.08, 'rgba(70,255,154,0.045)');
+    grad.addColorStop(0.18, 'rgba(70,255,154,0)');
+    grad.addColorStop(1, 'rgba(70,255,154,0)');
+    cx.beginPath();
+    cx.moveTo(x, y);
+    cx.arc(x, y, r, 0, Math.PI * 2);
+    cx.fillStyle = grad;
+    cx.fill();
+  }
+  /* sweep leading edge */
+  cx.beginPath();
+  cx.moveTo(x, y);
+  cx.lineTo(x + Math.cos(sweep) * r, y + Math.sin(sweep) * r);
+  cx.strokeStyle = 'rgba(70,255,154,0.5)';
+  cx.lineWidth = 1.5 * DPR;
+  cx.stroke();
+}
+
+function drawBlips() {
+  const { x, y } = radarCenter();
+  blips.forEach(b => {
+    b.life++;
+    /* brightness pulses when sweep passes */
+    const angTo = Math.atan2(b.y - y, b.x - x);
+    let diff = (sweep - angTo) % (Math.PI * 2);
+    if (diff < 0) diff += Math.PI * 2;
+    const glow = Math.max(0, 1 - diff * 1.4);
+    const base = b.hostile ? '255,77,77' : '70,255,154';
+    const alpha = 0.15 + glow * 0.85;
+    cx.fillStyle = 'rgba(' + base + ',' + alpha + ')';
+    if (b.hostile) {
+      const s = 5 * DPR;
+      cx.save(); cx.translate(b.x, b.y); cx.rotate(Math.PI / 4);
+      cx.fillRect(-s / 2, -s / 2, s, s);
+      cx.restore();
+    } else {
+      cx.beginPath(); cx.arc(b.x, b.y, 3 * DPR, 0, Math.PI * 2); cx.fill();
+    }
+    if (glow > 0.55) {
+      cx.font = (9 * DPR) + 'px "Share Tech Mono", monospace';
+      cx.fillStyle = 'rgba(' + base + ',' + (glow * 0.65) + ')';
+      cx.fillText(b.hostile ? 'HST-' + (b.life % 89 + 10) : 'FRD-' + (b.life % 89 + 10), b.x + 8 * DPR, b.y - 6 * DPR);
+    }
+    if (b.life > b.max) { blips.splice(blips.indexOf(b), 1); spawnBlip(); }
+  });
+}
+
+function drawMissiles() {
+  if (Math.random() < 0.006 && missiles.length < 3) spawnMissile();
+  missiles.forEach(m => {
+    m.x += m.vx; m.y += m.vy;
+    m.trail.push({ x: m.x, y: m.y });
+    if (m.trail.length > 46) m.trail.shift();
+    const col = m.hostile ? '255,120,80' : '160,220,255';
+    /* trail */
+    for (let i = 1; i < m.trail.length; i++) {
+      const p0 = m.trail[i - 1], p1 = m.trail[i];
+      const a = (i / m.trail.length) * 0.5;
+      cx.strokeStyle = 'rgba(' + col + ',' + a + ')';
+      cx.lineWidth = (i / m.trail.length) * 2.4 * DPR;
+      cx.beginPath(); cx.moveTo(p0.x, p0.y); cx.lineTo(p1.x, p1.y); cx.stroke();
+    }
+    /* head */
+    cx.beginPath();
+    cx.arc(m.x, m.y, 2.6 * DPR, 0, Math.PI * 2);
+    cx.fillStyle = 'rgba(255,255,255,0.95)';
+    cx.shadowColor = 'rgba(' + col + ',0.9)';
+    cx.shadowBlur = 14 * DPR;
+    cx.fill();
+    cx.shadowBlur = 0;
+    if (m.x < -120 * DPR || m.x > W + 120 * DPR) missiles.splice(missiles.indexOf(m), 1);
+  });
+}
+
+function frame() {
+  t++;
+  /* fade for phosphor persistence */
+  cx.fillStyle = 'rgba(4,7,12,0.28)';
+  cx.fillRect(0, 0, W, H);
+
+  drawGrid();
+  drawRadar();
+  drawBlips();
+  drawMissiles();
+
+  sweep += 0.012;
+  requestAnimationFrame(frame);
+}
+cx.fillStyle = '#04070c';
+cx.fillRect(0, 0, W, H);
+frame();
+
+/* ============ scroll reveal ============ */
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) e.target.classList.add('vis');
+}), { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+</body>
+</html>
